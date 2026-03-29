@@ -78,6 +78,7 @@ def main():
                 # Accelerating phase - thrust towards Mars
                 target_theta = -1.2
                 target_vx = TRANSIT_SPEED
+                current_stage_speed = TRANSIT_SPEED
                 stage_goal = np.array([MARS_X, ORBIT_HEIGHT, target_vx, 0, target_theta, 0])
                 transit_mode = True
             else:
@@ -103,7 +104,7 @@ def main():
         elif mission_stage == 2:  # Land Mars
             stage_goal = np.array([MARS_X, 0.0, 0, -LANDING_SPEED, 0, 0])
             current_stage_speed = LANDING_SPEED
-            if abs(y_est - 0.0) < 0.2 and abs(ekf.x[3]) < 0.1:
+            if abs(y_est - 0.0) < 0.5 and abs(ekf.x[3]) < 0.5:
                 mission_stage = 3
                 wait_start_time = current_time
                 print(f"[{current_time:.2f}s] Touchdown Mars. Waiting 5s.")
@@ -128,6 +129,7 @@ def main():
             if dist_to_earth > stopping_dist:
                 target_theta = 1.2
                 target_vx = -TRANSIT_SPEED
+                current_stage_speed = TRANSIT_SPEED
                 stage_goal = np.array([EARTH_X, ORBIT_HEIGHT, target_vx, 0, target_theta, 0])
                 transit_mode = True
             else:
@@ -153,7 +155,7 @@ def main():
         elif mission_stage == 6:  # Land Earth
             stage_goal = np.array([EARTH_X, 0.0, 0, -LANDING_SPEED, 0, 0])
             current_stage_speed = LANDING_SPEED
-            if abs(y_est - 0.0) < 0.2 and abs(ekf.x[3]) < 0.1:
+            if abs(y_est - 0.0) < 0.5 and abs(ekf.x[3]) < 0.5:
                 mission_stage = 9
                 print(f"[{current_time:.2f}s] Touchdown Earth. Mission Complete!")
         
