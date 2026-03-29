@@ -23,7 +23,7 @@ from rocket_sim.control import compute_lqr_gain, RocketPIDController
 
 
 def main():
-    SIM_TIME = 80.0
+    SIM_TIME = 250.0
     USE_PID = True  # Toggle between PID and LQR
     
     rocket = Rocket(initial_x=EARTH_X, initial_y=0.0, use_variable_gravity=True)
@@ -64,49 +64,45 @@ def main():
         # State machine logic
         if mission_stage == 0:  # Launch from Earth (vertical ascent)
             stage_goal = np.array([EARTH_X, ORBIT_HEIGHT, 0, 0, 0, 0])
-            current_stage_speed = 5.0
             if abs(y_est - ORBIT_HEIGHT) < 1.0 and abs(ekf.x[3]) < 0.5:
                 mission_stage = 1
                 print(f"[{current_time:.2f}s] Orbit Reached. Beginning Horizontal Transit to Mars.")
                 
         elif mission_stage == 1:  # Transit to Mars (horizontal flight)
             dist_to_mars = abs(x_est - MARS_X)
-            vx = ekf.x[2]  # Current horizontal velocity
-            
-            # Calculate stopping distance based on current velocity
-            # stopping_dist = v^2 / (2*a), with some safety margin
-            stopping_dist = max(50.0, abs(vx * vx) / 1.0)  # Approximate with a=1
+            vx = ekf.x[2]
+            # Brake earlier and more aggressively
+            stopping_dist = max(100.0, abs(vx * vx) / 1.5)
             
             if dist_to_mars > stopping_dist:
                 # Accelerating phase - thrust towards Mars
-                target_theta = -np.pi/2
-                target_vel = 0.3 * dist_to_mars
-                current_stage_speed = np.clip(target_vel, 8.0, TRANSIT_SPEED * 2)
+                target_theta = -1.2
+                target_vx = TRANSIT_SPEED
+                stage_goal = np.array([MARS_X, ORBIT_HEIGHT, target_vx, 0, target_theta, 0])
+                transit_mode = True
             else:
-                # Decelerating phase - flip and thrust backwards to brake
-                target_theta = np.pi/2  # Flip to point away from Mars
-                current_stage_speed = max(3.0, abs(vx) * 0.5)  # Slow approach
+                # Decelerating phase: let velocity-tracking PID handle braking
+                target_theta = 0.0
+                target_vx = 0.0
+                # Clamp ghost target to destination during braking
+                stage_goal = np.array([MARS_X, ORBIT_HEIGHT, target_vx, 0, target_theta, 0])
+                current_target[0] = MARS_X
+                transit_mode = True
             
-            stage_goal = np.array([MARS_X, ORBIT_HEIGHT, 0, 0, target_theta, 0])
-            transit_mode = True
-            
-            # Transition when close and slow enough
-            if dist_to_mars < 15.0 and abs(vx) < 3.0:
+            if dist_to_mars < 10.0 and abs(vx) < 2.0:
                 mission_stage = 7
                 print(f"[{current_time:.2f}s] Arrived at Mars Area. Stabilizing.")
 
         elif mission_stage == 7:  # Mars Stabilize
             stage_goal = np.array([MARS_X, ORBIT_HEIGHT, 0, 0, 0, 0])
-            current_stage_speed = 5.0
-            pos_ok = abs(x_est - MARS_X) < 1.0 and abs(y_est - ORBIT_HEIGHT) < 1.0
-            vel_ok = abs(ekf.x[2]) < 0.5 and abs(ekf.x[3]) < 0.5
-            if pos_ok and vel_ok:
+            transit_mode = False # Back to normal precision
+            if abs(x_est - MARS_X) < 1.0 and abs(y_est - ORBIT_HEIGHT) < 1.0 and abs(ekf.x[2]) < 0.5:
                 mission_stage = 2
                 print(f"[{current_time:.2f}s] Stabilized. Beginning Descent.")
                 
         elif mission_stage == 2:  # Land Mars
-            stage_goal = np.array([MARS_X, 0.0, 0, 0, 0, 0])
-            current_stage_speed = 2.0
+            stage_goal = np.array([MARS_X, 0.0, 0, -LANDING_SPEED, 0, 0])
+            current_stage_speed = LANDING_SPEED
             if abs(y_est - 0.0) < 0.2 and abs(ekf.x[3]) < 0.1:
                 mission_stage = 3
                 wait_start_time = current_time
@@ -114,27 +110,34 @@ def main():
                 
         elif mission_stage == 3:  # Wait on Mars
             stage_goal = np.array([MARS_X, 0.0, 0, 0, 0, 0])
-            current_stage_speed = 0.0
             if (current_time - wait_start_time) > 5.0:
                 mission_stage = 4
                 print(f"[{current_time:.2f}s] Launching from Mars.")
                 
         elif mission_stage == 4:  # Launch Mars (vertical ascent)
             stage_goal = np.array([MARS_X, ORBIT_HEIGHT, 0, 0, 0, 0])
-            current_stage_speed = 5.0
             if abs(y_est - ORBIT_HEIGHT) < 1.0:
                 mission_stage = 5
                 print(f"[{current_time:.2f}s] Mars Orbit Reached. Beginning Horizontal Transit to Earth.")
         
         elif mission_stage == 5:  # Transit to Earth (horizontal flight)
-            # Target theta = +pi/2 (tilted left, thrusting towards Earth)
-            target_theta = np.pi/2
-            stage_goal = np.array([EARTH_X, ORBIT_HEIGHT, 0, 0, target_theta, 0])
             dist_to_earth = abs(x_est - EARTH_X)
-            target_vel = 0.3 * dist_to_earth  # Faster acceleration
-            current_stage_speed = np.clip(target_vel, 8.0, TRANSIT_SPEED * 2)  # Increased speed
-            transit_mode = True  # Enable high power
-            if dist_to_earth < 30.0:
+            vx = ekf.x[2]
+            stopping_dist = max(70.0, abs(vx * vx) / 1.5)
+            
+            if dist_to_earth > stopping_dist:
+                target_theta = 1.2
+                target_vx = -TRANSIT_SPEED
+                stage_goal = np.array([EARTH_X, ORBIT_HEIGHT, target_vx, 0, target_theta, 0])
+                transit_mode = True
+            else:
+                target_theta = 0.0 # Let PID handle braking
+                target_vx = 0.0
+                stage_goal = np.array([EARTH_X, ORBIT_HEIGHT, target_vx, 0, target_theta, 0])
+                current_target[0] = EARTH_X
+                transit_mode = True
+            
+            if dist_to_earth < 10.0 and abs(vx) < 2.0:
                 mission_stage = 8
                 print(f"[{current_time:.2f}s] Earth Orbit Reached. Stabilizing.")
 
@@ -148,8 +151,15 @@ def main():
                 print(f"[{current_time:.2f}s] Stabilized. Beginning Descent.")
                 
         elif mission_stage == 6:  # Land Earth
+            stage_goal = np.array([EARTH_X, 0.0, 0, -LANDING_SPEED, 0, 0])
+            current_stage_speed = LANDING_SPEED
+            if abs(y_est - 0.0) < 0.2 and abs(ekf.x[3]) < 0.1:
+                mission_stage = 9
+                print(f"[{current_time:.2f}s] Touchdown Earth. Mission Complete!")
+        
+        elif mission_stage == 9: # Post-landing wait
             stage_goal = np.array([EARTH_X, 0.0, 0, 0, 0, 0])
-            current_stage_speed = 2.0
+            current_stage_speed = 0.0
 
         # Smooth trajectory update
         move_speed = current_stage_speed * DT
@@ -165,6 +175,11 @@ def main():
             current_target[1] += np.sign(dy) * move_speed
         else:
             current_target[1] = stage_goal[1]
+            
+        # Update target orientation and velocities directly
+        current_target[2] = stage_goal[2]
+        current_target[3] = stage_goal[3]
+        current_target[4] = stage_goal[4]
 
         targets_hist.append(current_target.copy())
 

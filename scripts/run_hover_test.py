@@ -33,7 +33,7 @@ def main():
     print(f"Simulation Start. Controller: {'PID' if USE_PID else 'LQR'}")
     
     # Target State (Hover at 10m)
-    x_target = np.array([0.0, 10.0, 0, 0, 0, 0])
+    x_target = np.array([20.0, 5.0, 0, 0, 0, 0])
     
     # Histories
     true_states = []
