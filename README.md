@@ -102,38 +102,45 @@ Without the Kalman Filter, the LQR controller would react to every bit of sensor
 
 ---
 
-## 3. kalman-test-sim.py
+## 3. PID Controller (Proportional-Integral-Derivative)
 
-This is a simplified testbed simulation designed to verify the control architecture.
+The **Mars Mission** script uses a robust, cascaded **PID Controller** as an alternative to LQR for complex trajectory tracking.
 
-**Key Features:**
-*   **Single Stage:** The rocket simply tries to hover at a target altitude (10m) and cancel out any initial velocity or displacement.
-*   **Visuals:**
-    *   **Blue Box:** The true physical rocket.
-    *   **Red Dashed Box:** The EKF's *estimate* of where the rocket is. You can see how the estimate converges to the true position.
-    *   **Graphs:** Real-time plots of Thrust and Torque inputs.
-*   **Code Structure:**
-    *   Defined `Rocket` class with non-linear dynamics.
-    *   `EKF` class for estimation.
-    *   `compute_lqr_gain()` calculates the optimal gains for hovering.
-    *   Main loop runs the simulation path: `Dynamics -> Sensors -> EKF -> LQR -> Actuators`.
+### Cascaded Architecture
+The controller manages three nested loops to ensure stability and precision:
+1.  **Altitude Loop (Y):** Controls `Thrust` to maintain a target altitude or vertical velocity.
+2.  **Lateral Loop (X):** Computes the required **tilt angle** ($\theta$) to move horizontally towards a target coordinate or maintain a horizontal velocity.
+3.  **Attitude Loop ($\theta$):** Controls `Torque` to achieve the target tilt angle with precision and damping.
 
-Run this file to see a basic demonstration of the LQR+EKF loop working to stabilize the rocket.
+### Advanced Features
+*   **Tilt-Compensated Thrust:** To maintain constant altitude while tilting for horizontal transit, the controller automatically increases thrust magnitude ($T_{req} = T_{base} / \cos(\theta)$), compensating for the loss of vertical lift.
+*   **Velocity-Aware Tracking:** The controller minimizes both position and velocity errors simultaneously. This allows the mission logic to command a specific transit speed (e.g., 15 m/s) and perform precise "braking" burns by targeting zero velocity at the destination.
+*   **Anti-Windup Logic:** Prevents the integrator from accumulating excessive error during long-duration thrust phases (like launch), ensuring zero overshoot during orbit insertion.
 
 ---
 
-## 4. mars-launcher.py
+## 4. Mission Simulation (`scripts/run_mars_mission.py`)
 
-This is a comprehensive mission simulation that builds upon the testbed.
+This script implements a complete **Earth-Mars-Earth** mission using the EKF for state estimation and the Cascaded PID for control.
 
-**Key Features:**
-*   **Full Mission Profile:** Simulates a complete Earth-to-Mars-to-Earth journey.
-    *   **Launch:** Ascend from Earth.
-    *   **Transit:** High-speed transfer to Mars.
-    *   **Landing:** Stabilize and land softly on Mars.
-    *   **Return:** Launch from Mars and return to Earth.
-*   **Variable Gravity:** The physics model blends Earth gravity (9.81 m/s²) and Mars gravity (3.73 m/s²) based on the rocket's position.
-*   **Adaptive Control:**
-    *   The LQR controller automatically switches its gain matrices (`K_EARTH`, `K_MARS`, `K_SPACE`) depending on the local gravity environment to maintain stability.
-*   **Trajectory Smoothing:** Instead of jumping instantly between targets, a "ghost target" slides smoothly along the path, guiding the rocket gently.
-*   **Visuals:** Detailed animation showing Earth, Mars, gravity fields, and RCS (Reaction Control System) thruster puffs firing to orient the rocket.
+**Mission Lifecycle:**
+*   **Launch from Earth:** Vertical ascent to orbit altitude.
+*   **Earth-Mars Transit:** High-speed horizontal flight (15 m/s) with aerodynamic-like tilting and precision braking at destination.
+*   **Mars Landing:** Soft descent to the surface with touchdown detection.
+*   **Mars Launch:** Return to Mars orbit after a scientific stay.
+*   **Mars-Earth Transit:** High-speed return to Earth.
+*   **Earth Landing:** Final touchdown at the original launch coordinates.
+
+**Environmental Simulation:**
+The physics engine simulates variable gravity fields ($9.81$ m/s² on Earth, $3.73$ m/s² on Mars) and blends them continuously as the rocket transits through space.
+
+---
+
+## 5. Development Testbed (`kalman-test-sim.py`)
+
+A simplified single-stage simulation used to verify the basic EKF and LQR/PID loop stability. 
+
+**Visuals:**
+*   **Blue Box:** True physical state of the rocket.
+*   **Red Dashed Box:** EKF's real-time estimate.
+*   **Graphs:** Live telemetry of thrust, torque, and positional errors.
