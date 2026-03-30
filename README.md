@@ -136,7 +136,7 @@ The physics engine simulates variable gravity fields ($9.81$ m/s² on Earth, $3.
 
 ---
 
-## 5. Development Testbed (`kalman-test-sim.py`)
+## 5. Development Testbed (`scripts/run_hover_test.py`)
 
 A simplified single-stage simulation used to verify the basic EKF and LQR/PID loop stability. 
 

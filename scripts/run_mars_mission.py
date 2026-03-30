@@ -240,7 +240,7 @@ def main():
     ax_anim.set_ylim(-70, 70)
     ax_anim.set_aspect('equal')
     ax_anim.grid(True)
-    ax_anim.set_title("Earth-Mars Mission (LQR + EKF)")
+    ax_anim.set_title(f"Earth-Mars Mission ({'PID' if USE_PID else 'LQR'} + EKF)")
     
     # Planets
     g_earth_patch = Circle((EARTH_X, -R_EARTH), R_GRAVITY_EARTH, color='skyblue', alpha=0.15)
