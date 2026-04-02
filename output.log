@@ -1,0 +1,3 @@
+2026-04-02 15:57:49.838 Python[18276:10095247] +[IMKClient subclass]: chose IMKClient_Modern
+2026-04-02 15:57:49.838 Python[18276:10095247] +[IMKInputSession subclass]: chose IMKInputSession_Modern
+Mission Start: Earth -> Mars -> Earth (Controller: PID)

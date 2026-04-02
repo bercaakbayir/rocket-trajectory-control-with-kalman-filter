@@ -15,15 +15,17 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from rocket_sim.config import (
     DT, MASS, EARTH_G, MARS_G, WIDTH, HEIGHT,
     EARTH_X, MARS_X, R_EARTH, R_MARS, R_GRAVITY_EARTH, R_GRAVITY_MARS,
-    TRANSIT_SPEED, LANDING_SPEED
+    TRANSIT_SPEED, LANDING_SPEED, ORBIT_HEIGHT
 )
 from rocket_sim.dynamics import Rocket, get_gravity
 from rocket_sim.estimation import EKF
 from rocket_sim.control import compute_lqr_gain, RocketPIDController
 
 
+from matplotlib.widgets import Button
+
 def main():
-    SIM_TIME = 250.0
+    SIM_TIME = 5000.0
     USE_PID = True  # Toggle between PID and LQR
     
     rocket = Rocket(initial_x=EARTH_X, initial_y=0.0, use_variable_gravity=True)
@@ -38,7 +40,7 @@ def main():
     pid_controller = RocketPIDController()
     
     mission_stage = 0
-    wait_start_time = 0
+    wait_start_time = 0.0
     current_target = np.array([EARTH_X, 0.0, 0, 0, 0, 0])
     
     steps = int(SIM_TIME / DT)
@@ -58,13 +60,11 @@ def main():
         current_stage_speed = LANDING_SPEED
         transit_mode = False  # Flag for increased thrust during transit
         
-        # Orbit height outside atmosphere (above gravity radius)
-        ORBIT_HEIGHT = 20.0
-        
         # State machine logic
         if mission_stage == 0:  # Launch from Earth (vertical ascent)
             stage_goal = np.array([EARTH_X, ORBIT_HEIGHT, 0, 0, 0, 0])
-            if abs(y_est - ORBIT_HEIGHT) < 1.0 and abs(ekf.x[3]) < 0.5:
+            current_stage_speed = 5000.0 # Faster ascent
+            if abs(y_est - ORBIT_HEIGHT) < 10000.0:
                 mission_stage = 1
                 print(f"[{current_time:.2f}s] Orbit Reached. Beginning Horizontal Transit to Mars.")
                 
@@ -72,7 +72,7 @@ def main():
             dist_to_mars = abs(x_est - MARS_X)
             vx = ekf.x[2]
             # Brake earlier and more aggressively
-            stopping_dist = max(100.0, abs(vx * vx) / 1.5)
+            stopping_dist = max(10000.0, abs(vx * vx) / 1.5)
             
             if dist_to_mars > stopping_dist:
                 # Accelerating phase - thrust towards Mars
@@ -90,21 +90,21 @@ def main():
                 current_target[0] = MARS_X
                 transit_mode = True
             
-            if dist_to_mars < 10.0 and abs(vx) < 2.0:
+            if dist_to_mars < 10000.0 and abs(vx) < 5.0:
                 mission_stage = 7
                 print(f"[{current_time:.2f}s] Arrived at Mars Area. Stabilizing.")
 
         elif mission_stage == 7:  # Mars Stabilize
             stage_goal = np.array([MARS_X, ORBIT_HEIGHT, 0, 0, 0, 0])
-            transit_mode = False # Back to normal precision
-            if abs(x_est - MARS_X) < 1.0 and abs(y_est - ORBIT_HEIGHT) < 1.0 and abs(ekf.x[2]) < 0.5:
+            transit_mode = False 
+            if abs(x_est - MARS_X) < 10000.0 and abs(y_est - ORBIT_HEIGHT) < 10000.0:
                 mission_stage = 2
                 print(f"[{current_time:.2f}s] Stabilized. Beginning Descent.")
                 
         elif mission_stage == 2:  # Land Mars
             stage_goal = np.array([MARS_X, 0.0, 0, -LANDING_SPEED, 0, 0])
-            current_stage_speed = LANDING_SPEED
-            if abs(y_est - 0.0) < 0.5 and abs(ekf.x[3]) < 0.5:
+            current_stage_speed = 5000.0
+            if abs(y_est - 0.0) < 50.0:
                 mission_stage = 3
                 wait_start_time = current_time
                 print(f"[{current_time:.2f}s] Touchdown Mars. Waiting 5s.")
@@ -117,14 +117,15 @@ def main():
                 
         elif mission_stage == 4:  # Launch Mars (vertical ascent)
             stage_goal = np.array([MARS_X, ORBIT_HEIGHT, 0, 0, 0, 0])
-            if abs(y_est - ORBIT_HEIGHT) < 1.0:
+            current_stage_speed = 5000.0
+            if abs(y_est - ORBIT_HEIGHT) < 10000.0:
                 mission_stage = 5
                 print(f"[{current_time:.2f}s] Mars Orbit Reached. Beginning Horizontal Transit to Earth.")
         
         elif mission_stage == 5:  # Transit to Earth (horizontal flight)
             dist_to_earth = abs(x_est - EARTH_X)
             vx = ekf.x[2]
-            stopping_dist = max(70.0, abs(vx * vx) / 1.5)
+            stopping_dist = max(10000.0, abs(vx * vx) / 1.5)
             
             if dist_to_earth > stopping_dist:
                 target_theta = 1.2
@@ -139,23 +140,22 @@ def main():
                 current_target[0] = EARTH_X
                 transit_mode = True
             
-            if dist_to_earth < 10.0 and abs(vx) < 2.0:
+            if dist_to_earth < 10000.0 and abs(vx) < 5.0:
                 mission_stage = 8
                 print(f"[{current_time:.2f}s] Earth Orbit Reached. Stabilizing.")
 
         elif mission_stage == 8:  # Earth Stabilize
             stage_goal = np.array([EARTH_X, ORBIT_HEIGHT, 0, 0, 0, 0])
-            current_stage_speed = 5.0
-            pos_ok = abs(x_est - EARTH_X) < 1.0 and abs(y_est - ORBIT_HEIGHT) < 1.0
-            vel_ok = abs(ekf.x[2]) < 0.5 and abs(ekf.x[3]) < 0.5
-            if pos_ok and vel_ok:
+            current_stage_speed = 5000.0
+            pos_ok = abs(x_est - EARTH_X) < 10000.0 and abs(y_est - ORBIT_HEIGHT) < 10000.0
+            if pos_ok:
                 mission_stage = 6
                 print(f"[{current_time:.2f}s] Stabilized. Beginning Descent.")
                 
         elif mission_stage == 6:  # Land Earth
             stage_goal = np.array([EARTH_X, 0.0, 0, -LANDING_SPEED, 0, 0])
-            current_stage_speed = LANDING_SPEED
-            if abs(y_est - 0.0) < 0.5 and abs(ekf.x[3]) < 0.5:
+            current_stage_speed = 5000.0
+            if abs(y_est - 0.0) < 50.0:
                 mission_stage = 9
                 print(f"[{current_time:.2f}s] Touchdown Earth. Mission Complete!")
         
@@ -163,25 +163,9 @@ def main():
             stage_goal = np.array([EARTH_X, 0.0, 0, 0, 0, 0])
             current_stage_speed = 0.0
 
-        # Smooth trajectory update
-        move_speed = current_stage_speed * DT
-        
-        dx = stage_goal[0] - current_target[0]
-        if abs(dx) > move_speed:
-            current_target[0] += np.sign(dx) * move_speed
-        else:
-            current_target[0] = stage_goal[0]
-            
-        dy = stage_goal[1] - current_target[1]
-        if abs(dy) > move_speed:
-            current_target[1] += np.sign(dy) * move_speed
-        else:
-            current_target[1] = stage_goal[1]
-            
-        # Update target orientation and velocities directly
-        current_target[2] = stage_goal[2]
-        current_target[3] = stage_goal[3]
-        current_target[4] = stage_goal[4]
+        # Snap target instantly to stage goal — the target IS the waypoint,
+        # and the rocket's PID handles the actual smooth movement toward it.
+        current_target[:] = stage_goal[:]
 
         targets_hist.append(current_target.copy())
 
@@ -226,37 +210,53 @@ def main():
         inputs.append(u)
 
     # Convert arrays
-    true_states = np.array(true_states)
-    est_states = np.array(est_states)
-    inputs = np.array(inputs)
-    targets_hist = np.array(targets_hist)
+    true_states_arr = np.array(true_states)
+    est_states_arr = np.array(est_states)
+    inputs_arr = np.array(inputs)
+    targets_hist_arr = np.array(targets_hist)
+    
+    # --- Animation State ---
+    class AnimState:
+        def __init__(self):
+            self.speed = 1
+            self.curr_idx = 0
+    state = AnimState()
     
     # --- Animation ---
-    fig = plt.figure(figsize=(12, 6))
-    gs = fig.add_gridspec(2, 2, height_ratios=[3, 1])
+    fig = plt.figure(figsize=(16, 12))
+    fig.patch.set_facecolor('black')
+    fig.suptitle("INTERPLANETARY MISSION: EARTH TO MARS", color='#39FF14', fontsize=22, fontweight='bold', y=0.97)
+    
+    gs = fig.add_gridspec(3, 2, height_ratios=[5, 1, 0.2], hspace=0.35)
     
     ax_anim = fig.add_subplot(gs[0, :])
-    ax_anim.set_xlim(EARTH_X - 70, MARS_X + 70)
-    ax_anim.set_ylim(-70, 70)
-    ax_anim.set_aspect('equal')
-    ax_anim.grid(True)
-    ax_anim.set_title(f"Earth-Mars Mission ({'PID' if USE_PID else 'LQR'} + EKF)")
+    ax_anim.set_facecolor('black')
     
+    # Realistic limits for 200M scale with 5M orbit maneuvers
+    ax_anim.set_xlim(EARTH_X - R_EARTH * 5.0, MARS_X + R_MARS * 5.0)
+    ax_anim.set_ylim(-20000000.0, 40000000.0)
+    ax_anim.set_aspect('equal')
+    ax_anim.grid(True, color='gray', alpha=0.1, linestyle='--')
+    
+    # Path: Neon Green Dotted Line (matching new orbit altitude)
+    path_x = [EARTH_X, EARTH_X, MARS_X, MARS_X]
+    path_y = [0, ORBIT_HEIGHT, ORBIT_HEIGHT, 0]
+    ax_anim.plot(path_x, path_y, color='#39FF14', linestyle=':', linewidth=2, alpha=0.8)
+
     # Planets
-    g_earth_patch = Circle((EARTH_X, -R_EARTH), R_GRAVITY_EARTH, color='skyblue', alpha=0.15)
-    ax_anim.add_patch(g_earth_patch)
-    earth_patch = Circle((EARTH_X, -R_EARTH), R_EARTH, color='blue', alpha=0.6, label='Earth')
+    # Visual Gravity "Atmospheres" (Glows) - Physics uses R_GRAVITY, but for display we use a smaller, brighter glow
+    ax_anim.add_patch(Circle((EARTH_X, -R_EARTH), R_EARTH * 3.0, color='skyblue', alpha=0.15))
+    earth_patch = Circle((EARTH_X, -R_EARTH), R_EARTH, color='#1a73e8', alpha=0.9, label='Earth')
     ax_anim.add_patch(earth_patch)
     
-    g_mars_patch = Circle((MARS_X, -R_MARS), R_GRAVITY_MARS, color='skyblue', alpha=0.15)
-    ax_anim.add_patch(g_mars_patch)
-    mars_patch = Circle((MARS_X, -R_MARS), R_MARS, color='red', alpha=0.6, label='Mars')
+    ax_anim.add_patch(Circle((MARS_X, -R_MARS), R_MARS * 3.0, color='#ff3300', alpha=0.15))
+    mars_patch = Circle((MARS_X, -R_MARS), R_MARS, color='#c1440e', alpha=0.9, label='Mars')
     ax_anim.add_patch(mars_patch)
     
     # Rocket
-    rocket_body = Polygon([[0,0]]*4, color='blue', alpha=0.8, label='Rocket')
-    rocket_est = Polygon([[0,0]]*4, color='gray', alpha=0.5, linestyle='--')
-    flame = Polygon([[0,0]]*3, color='orange')
+    rocket_body = Polygon([[0,0]]*4, color='#00f2ff', alpha=1.0, label='Rocket')
+    rocket_est = Polygon([[0,0]]*4, color='white', alpha=0.4, linestyle='--')
+    flame = Polygon([[0,0]]*3, color='#ffea00')
     rcs_left = Polygon([[0,0]]*3, color='white')
     rcs_right = Polygon([[0,0]]*3, color='white')
     
@@ -266,29 +266,62 @@ def main():
     ax_anim.add_patch(rcs_left)
     ax_anim.add_patch(rcs_right)
     
-    target_marker, = ax_anim.plot([], [], 'gx', markersize=10, label='Target')
-    ax_anim.legend(loc='upper right')
+    target_marker, = ax_anim.plot([], [], 'rx', markersize=12, markeredgewidth=2, label='Target')
+    ax_anim.tick_params(colors='white', labelsize=8)
     
-    time_text = ax_anim.text(0.02, 0.95, '', transform=ax_anim.transAxes)
+    # Legend at Top-Right, slightly above the plot to avoid overlapping planets
+    ax_anim.legend(loc='upper right', bbox_to_anchor=(1.0, 1.08), facecolor='black', edgecolor='white', labelcolor='white', fontsize=10)
     
     # Input plots
     ax_thrust = fig.add_subplot(gs[1, 0])
-    line_thrust, = ax_thrust.plot([], [], 'r')
-    ax_thrust.set_title("Thrust")
-    ax_thrust.set_ylim(0, 55)
+    ax_thrust.set_facecolor('#0a0a0a')
+    line_thrust, = ax_thrust.plot([], [], '#ff3300', linewidth=1.5)
+    ax_thrust.set_title("ENGINE THRUST (N)", color='white', fontsize=11, fontweight='bold')
+    ax_thrust.tick_params(colors='white', labelsize=9)
+    ax_thrust.set_ylim(0, 100)
+    ax_thrust.grid(True, alpha=0.1)
     
     ax_x = fig.add_subplot(gs[1, 1])
-    line_x, = ax_x.plot([], [], 'b')
-    ax_x.set_title("X Position")
-    ax_x.set_ylim(-5, 350)
+    ax_x.set_facecolor('#0a0a0a')
+    line_x, = ax_x.plot([], [], '#00f2ff', linewidth=1.5)
+    ax_x.set_title("MISSION PROGRESS (X-POS)", color='white', fontsize=11, fontweight='bold')
+    ax_x.tick_params(colors='white', labelsize=9)
+    ax_x.set_ylim(-R_EARTH, MARS_X + R_MARS)
+    ax_x.grid(True, alpha=0.1)
+
+    # Speed Toggle Button
+    ax_speed = fig.add_subplot(gs[2, :])
+    btn_speed = Button(ax_speed, 'Speed: 1x', color='#222', hovercolor='#444')
+    btn_speed.label.set_color('white')
+    btn_speed.label.set_fontweight('bold')
+    btn_speed.label.set_fontsize(12)
+
+    class Controls:
+        def cycle_speed(self, event):
+            speeds = [1, 2, 3, 5, 10]
+            current_idx = speeds.index(state.speed)
+            state.speed = speeds[(current_idx + 1) % len(speeds)]
+            btn_speed.label.set_text(f"Speed: {state.speed}x")
+            fig.canvas.draw_idle()
+    
+    controls = Controls()
+    btn_speed.on_clicked(controls.cycle_speed)
 
     def animate(i):
-        idx = min(i, len(true_states) - 1)
-        x, y, vx, vy, theta, omega = true_states[idx]
-        xe, ye, vxe, vye, theta_e, omega_e = est_states[idx]
-        tx, ty = targets_hist[idx][0], targets_hist[idx][1]
+        idx = state.curr_idx
+        if idx >= len(true_states_arr):
+            state.curr_idx = 0
+            idx = 0
         
-        w, h = WIDTH, HEIGHT
+        state.curr_idx += state.speed
+        
+        x, y, vx, vy, theta, omega = true_states_arr[idx]
+        xe, ye, vxe, vye, theta_e, omega_e = est_states_arr[idx]
+        tx, ty = targets_hist_arr[idx][0], targets_hist_arr[idx][1]
+        
+        v_scale = 1000000.0 
+        w, h = WIDTH * v_scale, HEIGHT * v_scale
+        
         corners = np.array([[-w/2, -h/2], [w/2, -h/2], [w/2, h/2], [-w/2, h/2]])
         
         c, s = np.cos(theta), np.sin(theta)
@@ -301,48 +334,40 @@ def main():
         rot_corners_e = corners @ Re.T + np.array([xe, ye])
         rocket_est.set_xy(rot_corners_e)
         
-        thrust = inputs[idx][0]
-        torque = inputs[idx][1]
+        thrust = inputs_arr[idx][0]
+        torque = inputs_arr[idx][1]
         
-        flame_len = thrust / 20.0
-        flame_pts = np.array([[-w/4, -h/2], [w/4, -h/2], [0, -h/2 - flame_len]])
+        # Reduced flame length scaling
+        fl_scale = (thrust / 10.0) * v_scale
+        flame_pts = np.array([[-w/4, -h/2], [w/4, -h/2], [0, -h/2 - fl_scale]])
         rot_flame = flame_pts @ R.T + np.array([x, y])
         flame.set_xy(rot_flame)
         
-        rcs_size = 0.3
-        rcs_top = h/2 - 0.2
-        
+        rcs_left.set_visible(torque < -1.0)
+        rcs_right.set_visible(torque > 1.0)
         if torque < -1.0:
-            pts = np.array([[-w/2, rcs_top], [-w/2 - rcs_size, rcs_top], [-w/2, rcs_top - rcs_size]])
-            rcs_left.set_xy(pts @ R.T + np.array([x, y]))
-            rcs_left.set_visible(True)
-        else:
-            rcs_left.set_visible(False)
-            
+            rcs_left.set_xy(np.array([[-w/2, h/2], [-w/2 - w, h/2], [-w/2, h/2 - w]]) @ R.T + [x, y])
         if torque > 1.0:
-            pts = np.array([[w/2, rcs_top], [w/2 + rcs_size, rcs_top], [w/2, rcs_top - rcs_size]])
-            rcs_right.set_xy(pts @ R.T + np.array([x, y]))
-            rcs_right.set_visible(True)
-        else:
-            rcs_right.set_visible(False)
+            rcs_right.set_xy(np.array([[w/2, h/2], [w/2 + w, h/2], [w/2, h/2 - w]]) @ R.T + [x, y])
             
         target_marker.set_data([tx], [ty])
-        time_text.set_text(f"Time: {idx*DT:.1f}s")
         
-        start = max(0, idx-200)
+        start = max(0, idx-500)
         times = np.arange(start, idx+1) * DT
-        line_thrust.set_data(times, inputs[start:idx+1, 0])
+        line_thrust.set_data(times, inputs_arr[start:idx+1, 0])
         ax_thrust.set_xlim(times[0], times[-1]+5)
         
-        line_x.set_data(times, true_states[start:idx+1, 0])
+        line_x.set_data(times, true_states_arr[start:idx+1, 0])
         ax_x.set_xlim(times[0], times[-1]+5)
         
         return []
 
-    ani = animation.FuncAnimation(fig, animate, frames=len(true_states), interval=20, blit=False)
-    plt.tight_layout()
-    plt.show()
+    fig.btn_speed = btn_speed
+    fig.controls = controls
 
+    ani = animation.FuncAnimation(fig, animate, frames=len(true_states_arr), interval=10, blit=False)
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    plt.show()
 
 if __name__ == "__main__":
     main()

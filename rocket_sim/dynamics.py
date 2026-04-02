@@ -13,26 +13,34 @@ def get_gravity(x, y):
     Returns vertical gravity magnitude based on position.
     Simulates separate gravity wells for Earth/Mars with a continuous blend.
     """
+    from .config import EARTH_X, MARS_X, R_EARTH, R_MARS, EARTH_G, MARS_G
+    
     h = max(0, y)
     
-    # Earth Component (fade out from x=50 to x=150)
+    # Midpoint for gravity transition
+    midpoint = (EARTH_X + MARS_X) / 2.0
+    transition_width = abs(MARS_X - EARTH_X) * 0.4
+    
+    # Earth Component
     g_earth_val = 0.0
-    if x < 150.0:
+    dist_to_earth_x = abs(x - EARTH_X)
+    if dist_to_earth_x < midpoint + transition_width:
         base = EARTH_G * (R_EARTH / (R_EARTH + h))**2
-        factor = 1.0
-        if x > 50.0:
-            factor = np.clip((150.0 - x) / 100.0, 0.0, 1.0)
+        # Transition factor
+        factor = np.clip((midpoint + transition_width - x) / (2 * transition_width), 0.0, 1.0)
         g_earth_val = base * factor
         
-    # Mars Component (fade in from x=150 to x=250)
+    # Mars Component
     g_mars_val = 0.0
-    if x > 150.0:
+    dist_to_mars_x = abs(x - MARS_X)
+    if dist_to_mars_x < midpoint + transition_width:
         base = MARS_G * (R_MARS / (R_MARS + h))**2
-        factor = np.clip((x - 150.0) / 100.0, 0.0, 1.0)
+        # Transition factor
+        factor = np.clip((x - (midpoint - transition_width)) / (2 * transition_width), 0.0, 1.0)
         g_mars_val = base * factor
         
-    # Minimum Control Floor
-    return max(0.5, g_earth_val, g_mars_val)
+    # Minimum Control Floor (Deep Space)
+    return max(0.1, g_earth_val, g_mars_val)
 
 
 class Rocket:

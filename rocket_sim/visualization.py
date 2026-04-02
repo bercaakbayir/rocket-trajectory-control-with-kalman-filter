@@ -28,31 +28,40 @@ class RocketVisualizer:
         
         # Earth visuals
         if show_earth:
-            g_patch = Circle((0, -R_EARTH), R_GRAVITY_EARTH, color='skyblue', alpha=0.15)
+            # Atmosphere/Gravity Radius
+            g_patch = Circle((0, -R_EARTH), R_GRAVITY_EARTH, color='skyblue', alpha=0.1)
             ax.add_patch(g_patch)
-            earth_patch = Circle((0, -R_EARTH), R_EARTH, color='blue', alpha=0.6)
+            # Planet Surface
+            earth_patch = Circle((0, -R_EARTH), R_EARTH, color='#1a73e8', alpha=0.8)
             ax.add_patch(earth_patch)
         
-        # Rocket body (will be replaced with Polygon)
-        self.rocket_body = Polygon([[0,0]]*4, color='blue', alpha=0.8, label='Rocket')
-        self.rocket_est = Polygon([[0,0]]*4, color='red', alpha=0.3, linestyle='--', label='EKF Est')
+        # Rocket body
+        self.rocket_body = Polygon([[0,0]]*4, color='#00f2ff', alpha=0.9, label='Rocket')
+        self.rocket_est = Polygon([[0,0]]*4, color='white', alpha=0.3, linestyle='--', label='EKF Est')
         ax.add_patch(self.rocket_body)
         ax.add_patch(self.rocket_est)
         
         # Flame
-        self.flame = Polygon([[0,0]]*3, color='orange')
+        self.flame = Polygon([[0,0]]*3, color='#ff6200')
         ax.add_patch(self.flame)
         
         # RCS
         if show_rcs:
-            self.rcs_left = Polygon([[0,0]]*3, color='gray')
-            self.rcs_right = Polygon([[0,0]]*3, color='gray')
+            self.rcs_left = Polygon([[0,0]]*3, color='white')
+            self.rcs_right = Polygon([[0,0]]*3, color='white')
             ax.add_patch(self.rcs_left)
             ax.add_patch(self.rcs_right)
         
         # Time text
-        self.time_text = ax.text(0.02, 0.95, '', transform=ax.transAxes)
+        self.time_text = ax.text(0.02, 0.95, '', transform=ax.transAxes, color='white', fontsize=10, fontweight='bold')
         
+        # Aesthetics for dark mode
+        ax.set_facecolor('black')
+        ax.grid(True, color='gray', alpha=0.2, linestyle='--')
+        ax.tick_params(colors='white')
+        for spine in ax.spines.values():
+            spine.set_color('white')
+
     def update(self, true_state, est_state, inputs, time):
         """
         Update all visual elements.

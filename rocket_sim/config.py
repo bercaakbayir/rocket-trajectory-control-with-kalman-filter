@@ -8,7 +8,7 @@ DT = 0.01  # Time step (seconds)
 
 # --- Gravity ---
 EARTH_G = 9.81  # m/s^2
-MARS_G = 3.73   # m/s^2
+MARS_G = 3.71   # m/s^2 (Standard Mars gravity)
 GRAVITY = EARTH_G  # Default for single-planet sims
 
 # --- Rocket Parameters ---
@@ -28,14 +28,17 @@ SIGMA_PROCESS_RATE = 0.001
 SIGMA_MEASURE_POS = 0.1
 SIGMA_MEASURE_ANGLE = 0.01
 
-# --- Planet Visuals ---
-R_EARTH = 40.0  # Earth is larger than Mars
-R_MARS = 20.0
-R_GRAVITY_EARTH = 55.0  # Atmosphere radius
-R_GRAVITY_MARS = 30.0
+# --- Planet Visuals (Real Size in meters) ---
+R_EARTH = 6371000.0  
+R_MARS = 3389500.0
+R_GRAVITY_EARTH = R_EARTH + 100000.0  # Atmosphere/Gravity influence radius
+R_GRAVITY_MARS = R_MARS + 50000.0
 
 # --- Mission Parameters ---
 EARTH_X = 0.0
-MARS_X = 300.0
-TRANSIT_SPEED = 15.0  # m/s
-LANDING_SPEED = 2.0   # m/s
+# ---# Mission scale (Final balanced realism: significant gap + 10x speed accessibility)
+MARS_X = 200000000.0 # 200,000 km (Earth is at 0)
+TRANSIT_SPEED = 500000.0 # m/s for interplanetary flight
+LANDING_SPEED = 10.0 # m/s for descent phase
+ORBIT_HEIGHT = 5000000.0 # 5,000 km target orbit
+MAX_THRUST = 40.0 # Increased for snappier response at scale
